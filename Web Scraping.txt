@@ -1,0 +1,93 @@
+Voici une procédure étape par étape pour réaliser du web scraping, créer une base de données, et gérer l'enregistrement des données tout en évitant les doublons :
+
+### 1. Préparation
+#### a. Choisir les outils et bibliothèques
+- **Langage de programmation** : Python est souvent utilisé pour le web scraping.
+- **Bibliothèques** :
+  - `requests` pour faire des requêtes HTTP.
+  - `BeautifulSoup` ou `lxml` pour analyser le HTML.
+  - `pandas` pour manipuler les données.
+  - `SQLAlchemy` ou `sqlite3` pour interagir avec la base de données.
+  - `smtplib` pour envoyer des emails.
+
+### 2. Créer la base de données
+#### a. Définir la structure de la base de données
+- Déterminez les tables nécessaires et leurs colonnes. Par exemple, pour une base de données de produits :
+  ```sql
+  CREATE TABLE products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE,
+      price REAL,
+      date_scraped DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  ```
+
+#### b. Initialiser la base de données
+```python
+import sqlite3
+
+conn = sqlite3.connect('scraping.db')
+c = conn.cursor()
+# Créer la table (si elle n'existe pas)
+c.execute('''CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, price REAL, date_scraped DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+conn.commit()
+```
+
+### 3. Effectuer le web scraping
+#### a. Faire une requête HTTP
+```python
+import requests
+from bs4 import BeautifulSoup
+
+url = 'https://example.com/products'
+response = requests.get(url)
+soup = BeautifulSoup(response.text, 'html.parser')
+```
+
+#### b. Extraire les données
+- Identifiez les éléments HTML contenant les données souhaitées. Par exemple :
+```python
+products = []
+for item in soup.find_all('div', class_='product'):
+    name = item.find('h2').text
+    price = float(item.find('span', class_='price').text.replace('$', ''))
+    products.append((name, price))
+```
+
+### 4. Enregistrer les données dans la base de données
+#### a. Vérifier les doublons et insérer les nouvelles données
+```python
+for name, price in products:
+    try:
+        c.execute('INSERT INTO products (name, price) VALUES (?, ?)', (name, price))
+        conn.commit()
+        send_email(name, price)  # Envoyer un email si c'est une nouvelle donnée
+    except sqlite3.IntegrityError:
+        # Les données existent déjà, ne rien faire
+        continue
+```
+
+### 5. Envoyer un email
+```python
+import smtplib
+from email.mime.text import MIMEText
+
+def send_email(name, price):
+    msg = MIMEText(f'New product added: {name} at ${price}')
+    msg['Subject'] = 'New Product Alert'
+    msg['From'] = 'your_email@example.com'
+    msg['To'] = 'recipient@example.com'
+    
+    with smtplib.SMTP('smtp.example.com') as server:
+        server.login('your_email@example.com', 'your_password')
+        server.send_message(msg)
+```
+
+### 6. Nettoyage
+- Fermez la connexion à la base de données après le scraping.
+```python
+conn.close()
+```
+
+### Conclusion
+En suivant ces étapes, vous pouvez réaliser un web scraping efficace, stocker les données dans une base de données tout en évitant les doublons, et envoyer des notifications par email pour les nouvelles données. Assurez-vous de respecter les politiques de scraping des sites web que vous ciblez.
